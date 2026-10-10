@@ -70,15 +70,23 @@ async fn shorten(
 ) -> Json<ShortenResponse> {
     println!("Received URL: {}", payload.url);
 
-    let code = generate_code();
-    let short_url = format!("http://localhost:3000/{code}");
-
-    {
-        // Write lock: only one request can modify the map at a time
+    let code = {
+        // Write lock held while checking AND inserting, so no other
+        // request can grab the same code in between
         let mut links = state.links.write().unwrap();
+
+        // Draw again until the code is not already in use
+        let mut code = generate_code();
+        while links.contains_key(&code) {
+            code = generate_code();
+        }
+
         links.insert(code.clone(), payload.url);
         println!("Stored links: {}", links.len());
-    } // lock released here
+        code
+    }; // lock released here
+
+    let short_url = format!("http://localhost:3000/{code}");
 
     Json(ShortenResponse { code, short_url })
 }
