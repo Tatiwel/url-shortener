@@ -41,6 +41,7 @@ async fn main() {
     let state = AppState {
         links: Arc::new(RwLock::new(HashMap::new())),
     };
+
     // Maps each path + HTTP method to its handler
     let app = Router::new()
         .route("/", get(root))
@@ -61,9 +62,8 @@ async fn root() -> &'static str {
     "Hello from the URL shortener!"
 }
 
-/// POST /shorten : receives a long URL and returns a short code
-// Json(payload) unwraps the request body into a ShortenRequest
 /// POST /shorten : receives a long URL, stores it and returns a short code
+// Json(payload) unwraps the request body into a ShortenRequest
 async fn shorten(
     State(state): State<AppState>,
     Json(payload): Json<ShortenRequest>,
@@ -82,6 +82,7 @@ async fn shorten(
 
     Json(ShortenResponse { code, short_url })
 }
+
 /// Generates a random 7-character code (a-z, A-Z, 0-9)
 fn generate_code() -> String {
     // &mut: lends the generator, allowing it to change its internal state
