@@ -5,6 +5,8 @@ use axum::{
 
 use serde::{Deserialize, Serialize};
 
+use rand::distr::{Alphanumeric, SampleString};
+
 #[derive(Deserialize)]
 struct ShortenRequest {
     url: String,
@@ -36,8 +38,12 @@ async fn root() -> &'static str {
 async fn shorten(Json(payload): Json<ShortenRequest>) -> Json<ShortenResponse> {
     println!("Received URL: {}", payload.url);
 
-    let code = String::from("abc1234");
+    let code = generate_code();
     let short_url = format!("http://localhost:3000/{code}");
 
     Json(ShortenResponse { code, short_url })
+}
+
+fn generate_code() -> String {
+    Alphanumeric.sample_string(&mut rand::rng(), 7)
 }
