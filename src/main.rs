@@ -1,5 +1,11 @@
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
+
 use axum::{
     Json, Router,
+    extract::State,
     routing::{get, post},
 };
 
@@ -21,13 +27,25 @@ struct ShortenResponse {
     short_url: String,
 }
 
+/// Shared application state, available to every handler
+#[derive(Clone)]
+struct AppState {
+    // code -> original URL
+    links: Arc<RwLock<HashMap<String, String>>>,
+}
+
 // Sets up the Tokio async runtime before running main
 #[tokio::main]
 async fn main() {
+    // Empty map, wrapped for safe sharing between threads
+    let state = AppState {
+        links: Arc::new(RwLock::new(HashMap::new())),
+    };
     // Maps each path + HTTP method to its handler
     let app = Router::new()
         .route("/", get(root))
-        .route("/shorten", post(shorten));
+        .route("/shorten", post(shorten))
+        .with_state(state);
 
     // 0.0.0.0 = accept connections from any network interface
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -45,15 +63,25 @@ async fn root() -> &'static str {
 
 /// POST /shorten : receives a long URL and returns a short code
 // Json(payload) unwraps the request body into a ShortenRequest
-async fn shorten(Json(payload): Json<ShortenRequest>) -> Json<ShortenResponse> {
+/// POST /shorten : receives a long URL, stores it and returns a short code
+async fn shorten(
+    State(state): State<AppState>,
+    Json(payload): Json<ShortenRequest>,
+) -> Json<ShortenResponse> {
     println!("Received URL: {}", payload.url);
 
     let code = generate_code();
     let short_url = format!("http://localhost:3000/{code}");
 
+    {
+        // Write lock: only one request can modify the map at a time
+        let mut links = state.links.write().unwrap();
+        links.insert(code.clone(), payload.url);
+        println!("Stored links: {}", links.len());
+    } // lock released here
+
     Json(ShortenResponse { code, short_url })
 }
-
 /// Generates a random 7-character code (a-z, A-Z, 0-9)
 fn generate_code() -> String {
     // &mut: lends the generator, allowing it to change its internal state
