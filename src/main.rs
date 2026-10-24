@@ -16,6 +16,8 @@ use serde::{Deserialize, Serialize};
 // SampleString is a trait: it must be imported for .sample_string() to work
 use rand::distr::{Alphanumeric, SampleString};
 
+use url::Url;
+
 /// Request body for POST /shorten (JSON -> struct)
 #[derive(Deserialize)]
 struct ShortenRequest {
@@ -70,8 +72,19 @@ async fn root() -> &'static str {
 async fn shorten(
     State(state): State<AppState>,
     Json(payload): Json<ShortenRequest>,
-) -> Json<ShortenResponse> {
+) -> Result<Json<ShortenResponse>, StatusCode> {
     println!("Received URL: {}", payload.url);
+
+    // Only accept absolute http(s) URLs: rejects junk text and
+    // dangerous schemes like javascript: or file:
+    let is_valid = match Url::parse(&payload.url) {
+        Ok(parsed) => parsed.scheme() == "http" || parsed.scheme() == "https",
+        Err(_) => false,
+    };
+
+    if !is_valid {
+        return Err(StatusCode::BAD_REQUEST);
+    }
 
     let code = {
         // Write lock held while checking AND inserting, so no other
@@ -91,7 +104,7 @@ async fn shorten(
 
     let short_url = format!("http://localhost:3000/{code}");
 
-    Json(ShortenResponse { code, short_url })
+    Ok(Json(ShortenResponse { code, short_url }))
 }
 
 /// GET /{code} : redirects to the original URL, or 404 if the code doesn't exist
@@ -107,6 +120,7 @@ async fn redirect(
         None => Err(StatusCode::NOT_FOUND),
     }
 }
+
 /// Generates a random 7-character code (a-z, A-Z, 0-9)
 fn generate_code() -> String {
     // &mut: lends the generator, allowing it to change its internal state

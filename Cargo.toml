@@ -8,3 +8,4 @@ axum = "0.8.9"
 rand = "0.10.3"
 serde = { version = "1.0.229", features = ["derive"] }
 tokio = { version = "1.53.1", features = ["full"] }
+url = "2.5.8"
