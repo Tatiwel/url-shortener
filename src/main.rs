@@ -5,7 +5,9 @@ use std::{
 
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{Path, State},
+    http::StatusCode,
+    response::Redirect,
     routing::{get, post},
 };
 
@@ -46,6 +48,7 @@ async fn main() {
     let app = Router::new()
         .route("/", get(root))
         .route("/shorten", post(shorten))
+        .route("/{code}", get(redirect))
         .with_state(state);
 
     // 0.0.0.0 = accept connections from any network interface
@@ -91,6 +94,19 @@ async fn shorten(
     Json(ShortenResponse { code, short_url })
 }
 
+/// GET /{code} : redirects to the original URL, or 404 if the code doesn't exist
+async fn redirect(
+    State(state): State<AppState>,
+    Path(code): Path<String>,
+) -> Result<Redirect, StatusCode> {
+    // Read lock: many requests can read at the same time
+    let links = state.links.read().unwrap();
+
+    match links.get(&code) {
+        Some(url) => Ok(Redirect::temporary(url)),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
 /// Generates a random 7-character code (a-z, A-Z, 0-9)
 fn generate_code() -> String {
     // &mut: lends the generator, allowing it to change its internal state
